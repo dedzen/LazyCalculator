@@ -1,26 +1,28 @@
-public class Node
+using System.Runtime.InteropServices.Marshalling;
+
+public class Node(Token content, Node? lchild = null, Node? rchild = null)
 {
-    public Token Content;
-    public Node? Lchild{get;set;}
-    public Node? Rchild{get;set;}
-    public Node(Token content, Node? lchild = null, Node? rchild=null)
-    {
-        Content = content;
-        Lchild = lchild;
-        Rchild = rchild;
-    }
-    
+    public Token Content = content;
+    public Node? Lchild { get; set; } = lchild;
+    public Node? Rchild { get; set; } = rchild;
 }
 
 public class AST
 {
-    public static Node ASTBuilder(Token[] tokens)
+    public static Node ASTBuilder(Token[] tokens, string? variableName=null)
     {
-        Stack<Node> stack = new();
+        StackX<Node> stack = new();
         foreach(Token t in tokens)
         {
             if (t.tokenType == TokenType.Number || t.tokenType==TokenType.Variable) 
             {
+                if (variableName!=null)
+                {
+                    if (t.tokenType==TokenType.Variable && t.content == variableName)
+                    {
+                        throw new Exception($"Circular definition of variable {variableName}");
+                    }
+                }
                 stack.Push(new Node(t));
             }
             else if(t.tokenType == TokenType.Operator || t.tokenType==TokenType.BinaryFunction)
@@ -38,7 +40,7 @@ public class AST
         return stack.Pop();
     }
 
-    public static float ASTEval(Node root)
+    public static float ASTEval(Node root, string? variableName=null)
     {
         if (root.Content.tokenType == TokenType.Number)
         {
@@ -46,9 +48,15 @@ public class AST
         }
         if (root.Content.tokenType == TokenType.Variable)
         {
+            if (variableName != null)
+            {
+                if (root.Content.content == variableName){
+                    throw new Exception($"Circular definition of variable {variableName}");
+                }
+            }
             if (Memory.variables.TryGetValue(root.Content.content, out Node? value))
             {
-                return ASTEval(value);
+                return ASTEval(value, variableName);
             }
             else
             {
@@ -58,8 +66,8 @@ public class AST
         else if(root.Content.tokenType == TokenType.Operator || root.Content.tokenType == TokenType.BinaryFunction)
         {
 
-            float left = ASTEval(root.Lchild!);
-            float right = ASTEval(root.Rchild!);
+            float left = ASTEval(root.Lchild!, variableName);
+            float right = ASTEval(root.Rchild!, variableName);
             switch (root.Content.content)
             {
                 case "max":
@@ -85,7 +93,7 @@ public class AST
         }
         else if(root.Content.tokenType == TokenType.UnaryFunction)
         {
-            float left = ASTEval(root.Lchild!);
+            float left = ASTEval(root.Lchild!, variableName);
             double d1 = (double)left;
             switch (root.Content.content)
             {

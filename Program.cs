@@ -1,114 +1,97 @@
-﻿
-public enum TokenType
-{
-    Number,  //number
-    Operator, //binary infix operators (+)
-    Bracket, //()
-    UnaryFunction, //sin
-    BinaryFunction, //max
-    Variable, //variable or constant
-    Comma
-}
-
-public static class Memory
+﻿public static class Memory
 {
     public static Dictionary<string, float> constants = new Dictionary<string, float>
     {
         {"pi", (float)Math.PI},
         {"G", 9.81f},
         {"eul", 2.71828f}
-    }; 
+    };
     public static Dictionary<string, Node> variables = new Dictionary<string, Node>();
 }
 
-public class Token
-{
-    public TokenType tokenType {get; set;}
-    public string content {get; set;}
-    public Token(TokenType _tokenType, string _content)
-    {
-        tokenType = _tokenType;
-        content = _content;
-    }
-    public override string ToString()
-    {
-        return $"Token: {tokenType} {content}";
-    }
-    public static string PrintList(Token[] input)
-    {
-        string result = "";
-        foreach(Token t in input)
-        {
-            result+= t.content + " ";
-        }
-        return result.Substring(0, result.Length-1);
-    }
-    public static Token parseLiteral(string input)
-    {
-        string[] unaryFunctions = ["sin", "cos", "tan", "sqrt", "abs"];
-        string[] binaryFunctions = ["max", "min", "lze"];
-        if (unaryFunctions.Contains(input))
-        {
-            return new Token(TokenType.UnaryFunction, input);
-        }
-        else if (binaryFunctions.Contains(input))
-        {
-            return new Token(TokenType.BinaryFunction, input);
-        }
-        else
-        {
-            if (Memory.constants.TryGetValue(input, out float value))
-            {
-                return new Token(TokenType.Number, value.ToString());
-            }
-            else{return new Token(TokenType.Variable, input);}
-            
-        }
-    }
-    public static bool TryGetOpPriority(Token t, out int priority)
-    {
-        Dictionary<string, int> pairs = new Dictionary<string, int>
-        {
-            {"+", 1},
-            {"-", 1},
-            {"*", 2},
-            {"/", 2},
-            {"^", 3},
-            {"sin", 10},
-            {"cos", 10},
-            {"tan", 10},
-            {"abs", 10},
-            {"sqrt", 10},
-            {"max", 10},
-            {"min", 10},
-            {"lze", 10}
-        };
-        return pairs.TryGetValue(t.content, out priority);
-    } 
-
-}
-
-
 class Program
 {
+    // Formatting
+    private const string bold = "\x1b[1m";
+    private const string ubold = "\x1b[0m";
+    private const string line = "\x1b[4m";
+    private const string uline = "\x1b[24m";
+    static void PrintHelp()
+    {
+        Console.WriteLine("This is a CLI interactive calculator with variable support.");
+        Console.WriteLine($"{bold}Functions{ubold} supported: +, -, *, /, ^\nsin, cos, tan, sqrt, abs, max, min, lze(less than or equal).\n{bold}Constants{ubold}: pi, G, eul.\n");
+        Console.WriteLine($"{bold}Commands{ubold} (don't include tics):\nCtrl+C or `exit` to exit; `render` to toggle AST rendering\n`help` to get this message\n`flush` to clear variable memory\n{bold}`examples` to see examples {"\x1b[38;5;93m"}(this is important){ubold}\n{bold}`lazy` to toggle the evaluator{ubold} - {line}in lazy mode(default) there are variables, lazy evaluation, AST resolver. In non-lazy there is no memory, only constants may be used.{uline}");
+        Console.WriteLine($"{bold}Variables are expressions{ubold}, ranging from a = 5, to something like foo = abs(cos(b))/2. Always defined with `name` = `expession`.\nDon't include tics\n{line}To eval the variable, enter it's name.{uline}");
+    }
+    static void PrintExamples()
+    {
+        string[] basics = [
+            "> 2+3*8              = 26",
+            "> (5*(10-2))+6       = 46",
+            "> max(2, sin(0))/2   = 1",
+            "> sqrt(abs(0-100))+1 = 11",
+            "> tan(pi/3)          = 1.73205",
+            "> sqrt(3)            = 1.73205",
+            "> (sqrt(4)^sqrt(9))  = 8"
+        ];
+        string[] variables = [
+            "> a = 24-5",
+            "> a",
+            ": a is 19",
+            "> a = 26*2^sqrt(4)-b",
+            "> a",
+            ": a is 104-b          <- lazy evaluation here",
+            "> b = 3",
+            "> a",
+            ": a is 101",
+            "> b = 104",
+            "> a",
+            ": a is 0               <- and here",
+            "> x = x + 2",
+            ": Exception: Circular defiinition",
+            "> x = p^2",
+            "> p = x-2",
+            ": Exception: Circular defiinition"
+        ];
+        Console.WriteLine($"{bold}Basic evaluations, work in both modes: {ubold}");
+        foreach(string s in basics)
+        {
+            Console.WriteLine(s);
+        }
+        Console.WriteLine($"{bold}Some examples of variables in lazy mode: {ubold}");
+        foreach (string s in variables)
+        {
+            if (s.StartsWith(":"))
+            {
+                Console.ForegroundColor = ConsoleColor.DarkMagenta;
+                Console.WriteLine(s);
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.WriteLine(s);
+            }
+        }
+
+    }
     static bool render = true;
     static bool lazy = true;
 
     static Token[] Tokenize(string input)
     {
         input += "|"; //I use this to terminate the string in parsing process
-        
-        List<Token> result = new List<Token>();   
+
+        ListX<Token> result = new ListX<Token>();
         bool parsingNumber = false;
         bool parsingLitelar = false;
         string tokenContent = "";
 
-        char[] tokenStop = ['(',')', ' ', '|', ','];  //literals and numbers stop on these chars
-        char[] binaryOps = ['+', '-', '*', '/', '^']; //allowed 'middle' binary operators
+        char[] tokenStop = ['(', ')', ' ', '|', ','];  //literals and numbers stop on these chars
+        char[] binaryOps = ['+', '-', '*', '/', '^']; //allowed infix binary operators
         char[] allowedSpecials = tokenStop.Concat(binaryOps).ToArray(); //all allowed special characters
         foreach (char c in input)
         {
-            if (char.IsAsciiDigit(c) || c=='.')
+            if (char.IsAsciiDigit(c) || c == '.')
             {
                 parsingNumber = true;
                 tokenContent += c;
@@ -125,11 +108,11 @@ class Program
                     throw new ArgumentException($"Unknown literal {c}");
                 }
                 if (parsingNumber)
-                    {
-                        result.Add(new Token(TokenType.Number, tokenContent));
-                        tokenContent = "";
-                        parsingNumber = false;
-                    }
+                {
+                    result.Add(new Token(TokenType.Number, tokenContent));
+                    tokenContent = "";
+                    parsingNumber = false;
+                }
                 else if (parsingLitelar)
                 {
                     result.Add(Token.parseLiteral(tokenContent));
@@ -140,7 +123,7 @@ class Program
                 {
                     result.Add(new Token(TokenType.Operator, c.ToString()));
                 }
-                else if (c=='(' || c==')')
+                else if (c == '(' || c == ')')
                 {
                     result.Add(new Token(TokenType.Bracket, c.ToString()));
                 }
@@ -150,28 +133,28 @@ class Program
                 }
             }
         }
-            return [.. result];
+        return result.ToArray();
     }
     static Token[] SortAlgorithm(Token[] input)
     {
-        Stack<Token> stack = new();
-        Queue<Token> queue = new();
-        string[] operators = ["+", "-", "*", "/", "^"];
-        
-        foreach(Token t in input)
+        StackX<Token> stack = new();
+        QueueX<Token> queue = new();
+
+        foreach (Token t in input)
         {
-            if (t.tokenType == TokenType.Number || t.tokenType==TokenType.Variable)
+            if (t.tokenType == TokenType.Number || t.tokenType == TokenType.Variable)
             {
                 queue.Enqueue(t);
             }
             else if (t.tokenType == TokenType.Operator || t.tokenType == TokenType.BinaryFunction || t.tokenType == TokenType.UnaryFunction)
             {
-                while (stack.Count>0 && Token.TryGetOpPriority(stack.Peek(), out int priorityStack))
+                while (stack.Count > 0 && Token.TryGetOpPriority(stack.Peek(), out int priorityStack))
                 {
                     Token.TryGetOpPriority(t, out int priorityCurrent);
-                    int PriorityDiff = priorityStack-priorityCurrent;
-                    if (PriorityDiff>0 || (t.content!="^" && PriorityDiff == 0)){
-                        queue.Enqueue(stack.Pop());       
+                    int PriorityDiff = priorityStack - priorityCurrent;
+                    if (PriorityDiff > 0 || (t.content != "^" && PriorityDiff == 0))
+                    {
+                        queue.Enqueue(stack.Pop());
                     }
                     else
                     {
@@ -180,7 +163,7 @@ class Program
                 }
                 stack.Push(t);
             }
-    
+
             else if (t.tokenType == TokenType.Bracket)
             {
                 if (t.content == "(")
@@ -189,14 +172,16 @@ class Program
                 }
                 if (t.content == ")")
                 {
-                    while (stack.Count>0)
+                    while (stack.Count > 0)
                     {
                         Token top = stack.Pop();
                         if (top.content == "(")
                         {
-                            if (stack.Peek().tokenType==TokenType.UnaryFunction || stack.Peek().tokenType == TokenType.BinaryFunction)
-                            {
-                                queue.Enqueue(stack.Pop());
+                            if (stack.Count != 0){
+                                if (stack.Peek().tokenType == TokenType.UnaryFunction || stack.Peek().tokenType == TokenType.BinaryFunction)
+                                {
+                                    queue.Enqueue(stack.Pop());
+                                }
                             }
                             break;
                         }
@@ -216,26 +201,26 @@ class Program
             }
         }
 
-        while(stack.Count != 0)
+        while (stack.Count != 0)
         {
             queue.Enqueue(stack.Pop());
         }
         return queue.ToArray();
-        
+
 
     }
-    
+
     //Regular calculation based on RPN, no lazy evaluation, no variable support
     static float PlainEval(Token[] input)
     {
-        Stack<float> stack = new();
+        StackX<float> stack = new();
         foreach (Token t in input)
         {
             if (t.tokenType == TokenType.Number)
             {
                 stack.Push(float.Parse(t.content));
             }
-            if (t.tokenType==TokenType.Operator || t.tokenType == TokenType.BinaryFunction)
+            if (t.tokenType == TokenType.Operator || t.tokenType == TokenType.BinaryFunction)
             {
                 float t1 = stack.Pop();
                 float t2 = stack.Pop();
@@ -243,21 +228,21 @@ class Program
                 switch (t.content)
                 {
                     case "+":
-                        result = t2+t1;
+                        result = t2 + t1;
                         break;
                     case "-":
-                        result = t2-t1;
+                        result = t2 - t1;
                         break;
                     case "*":
-                        result = t2*t1;
+                        result = t2 * t1;
                         break;
                     case "/":
-                        result = t2/t1;
+                        result = t2 / t1;
                         break;
                     case "^":
                         double d1 = (double)t1;
                         double d2 = (double)t2;
-                        result = (float)Math.Pow(d2,d1);
+                        result = (float)Math.Pow(d2, d1);
                         break;
                     case "max":
                         result = Math.Max(t1, t2);
@@ -266,14 +251,14 @@ class Program
                         result = Math.Min(t1, t2);
                         break;
                     case "lze":
-                        result = t1>t2?1f:0f;
+                        result = t1 > t2 ? 1f : 0f;
                         break;
                     default:
                         break;
                 }
                 stack.Push(result);
             }
-            else if (t.tokenType==TokenType.UnaryFunction)
+            else if (t.tokenType == TokenType.UnaryFunction)
             {
                 double t1 = stack.Pop();
                 float result = 0;
@@ -295,15 +280,15 @@ class Program
                         result = (float)Math.Abs(t1);
                         break;
                     default:
-                        break; 
+                        break;
                 }
                 stack.Push(result);
             }
         }
         return stack.Pop();
     }
-   
-    static void ExecCommand(string input, string help)
+
+    static void CommandExec(string input)
     {
         switch (input)
         {
@@ -312,7 +297,7 @@ class Program
                 Environment.Exit(0);
                 break;
             case "help":
-                Console.WriteLine(help);
+                PrintHelp();
                 break;
             case "render":
                 Console.WriteLine("AST rendering " + (render ? "OFF" : "ON"));
@@ -325,6 +310,9 @@ class Program
             case "lazy":
                 Console.WriteLine("Lazy evaluation and variable support " + (lazy ? "OFF" : "ON"));
                 lazy = !lazy;
+                break;
+            case "examples":
+                PrintExamples();
                 break;
         }
     }
@@ -340,7 +328,7 @@ class Program
             Token[] tokenList = Tokenize(input);
             tokenList = SortAlgorithm(tokenList);
             // Console.WriteLine(Token.PrintList(tokenList));
-            Node ASTRoot = AST.ASTBuilder(tokenList);
+            Node ASTRoot = AST.ASTBuilder(tokenList, varName);
             Node ASTRootResolved = AST.ASTResolver(ASTRoot); // Lazy evaluate here
             if (!Memory.variables.TryGetValue(varName, out Node? _))
             {
@@ -361,7 +349,7 @@ class Program
             if (Memory.variables.TryGetValue(varName, out Node? root))
             {
                 if (render) { AST.ASTRender(root); }
-                Console.WriteLine("Result: " + AST.ASTEval(root));
+                Console.WriteLine("Result: " + AST.ASTEval(root, varName));
             }
             else
             {
@@ -371,55 +359,44 @@ class Program
         else
         {
             Token[] tokenList = Tokenize(input);
-            tokenList = SortAlgorithm(tokenList);
             // Console.WriteLine(Token.PrintList(tokenList));
+            tokenList = SortAlgorithm(tokenList);
             Node ASTRoot = AST.ASTBuilder(tokenList);
-            Console.WriteLine(AST.ASTEval(ASTRoot));
+            Console.WriteLine("Result: " + AST.ASTEval(ASTRoot));
             if (render) { AST.ASTRender(ASTRoot); }
         }
     }
     static void PlainExec(string input) // Operate when in non-lazy mode (single expression mode)
     {
-        if (input.Contains('-'))
+        if (input.Contains('='))
         {
             throw new ArgumentException("No variables in non-lazy mode");
         }
         Token[] tokenList = Tokenize(input);
         tokenList = SortAlgorithm(tokenList);
         // Console.WriteLine(Token.PrintList(tokenList));
-        Node ASTRoot = AST.ASTBuilder(tokenList);
-        Console.WriteLine(AST.ASTEval(ASTRoot));
-        if (render) { AST.ASTRender(ASTRoot); }
-    } 
+        Console.WriteLine("Result: " + PlainEval(tokenList));
+        if (render)
+        {
+            Node ASTRoot = AST.ASTBuilder(tokenList);
+            AST.ASTRender(ASTRoot);
+        }
+    }
     static void Main(string[] args)
     {
-        string[] commands = ["help", "lazy", "flush", "render", "exit"];
-        string help = @"This is a CLI interactive calculator with variable support.
-Functions supported: +, -, *, /, ^
-sin, cos, tan, sqrt, abs, max, min, lze(less than or equal).
-Constants: pi, G, eul.
-
-Commands (don't include tics): Ctrl+C or `exit` to exit; `render` to toggle AST rendering;
-`help` to get this message;
-`flush` to clear variable memory
-`lazy` to toggle the evaluator - in lazy mode(default) there are variables, lazy evaluation, AST resolver. In non-lazy there is no memory, only constants may be used.
-
-Variables are expressions, ranging from a = 5, to something like foo = abs(cos(b))/2. Always defined with `name` = `expession`.
-Don't include tics
-To eval the variable, enter it's name.
-";
-        Console.WriteLine(help);
+        string[] commands = ["help", "lazy", "flush", "render", "exit", "examples"];
+        PrintHelp();
         while (true)
         {
             Console.Write(">>> ");
             string? input = Console.ReadLine();
-            if(input==null || input.Length <= 0)
+            if (input == null || input.Length <= 0)
             {
                 continue;
             }
             if (commands.Contains(input))  // If input is one of the commands
             {
-                ExecCommand(input, help);
+                CommandExec(input);
             }
             else
             {
@@ -434,4 +411,5 @@ To eval the variable, enter it's name.
             }
         }
     }
+
 }
