@@ -23,7 +23,8 @@ There is **dynamic config** that may be changed with commands. The help screen i
     - *infix:* `+ - * / ^`
     - *prefix unary*: `abs sin cos sqrt tan`
     - *prefix binary*: `max(a,b) min(a,b) lze(a,b)` (lze is less than or equal, like in assembly)
-
+### Try online
+You can use [dotnetfiddle](https://dotnetfiddle.net/Pf6Xsu). Kind of breaks my beautiful interpreter appearance, but still works. I would't recommend reading it there though, it's 800 lines glued together.
 ### Examples
 ![Examples from examples command](examples.jpg)
 
