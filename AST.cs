@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices.Marshalling;
-
 public class Node(Token content, Node? lchild = null, Node? rchild = null)
 {
     public Token Content = content;
@@ -83,7 +81,7 @@ public class AST
                 case "^":
                     double d1 = (double)left;
                     double d2 = (double)right;
-                    return (float)Math.Pow(d2,d1);
+                    return (float)Math.Pow(d1,d2);
                 case "min":
                     return Math.Min(left, right);                
                 case "lze":

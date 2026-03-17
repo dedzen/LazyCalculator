@@ -146,7 +146,7 @@ class Program
             {
                 queue.Enqueue(t);
             }
-            else if (t.tokenType == TokenType.Operator || t.tokenType == TokenType.BinaryFunction || t.tokenType == TokenType.UnaryFunction)
+            else if (t.tokenType == TokenType.Operator || t.tokenType == TokenType.BinaryFunction || t.tokenType == TokenType.UnaryFunction || t.tokenType==TokenType.TernaryFunction)
             {
                 while (stack.Count > 0 && Token.TryGetOpPriority(stack.Peek(), out int priorityStack))
                 {
@@ -283,6 +283,16 @@ class Program
                         break;
                 }
                 stack.Push(result);
+            }
+            else if(t.tokenType == TokenType.TernaryFunction)
+            {
+                float t1 = stack.Pop();
+                float t2 = stack.Pop();
+                float t3 = stack.Pop();
+                if (t.content == "clamp")
+                {
+                    stack.Push(Math.Clamp(t3, t2, t1));
+                }
             }
         }
         return stack.Pop();

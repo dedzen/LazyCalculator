@@ -6,7 +6,8 @@ public enum TokenType
     UnaryFunction, //sin
     BinaryFunction, //max
     Variable, //variable or constant
-    Comma
+    Comma,
+    TernaryFunction
 }
 public class Token
 {
@@ -34,6 +35,7 @@ public class Token
     {
         string[] unaryFunctions = ["sin", "cos", "tan", "sqrt", "abs"];
         string[] binaryFunctions = ["max", "min", "lze"];
+        string[] ternaryFunctions = ["clamp"];
         if (unaryFunctions.Contains(input))
         {
             return new Token(TokenType.UnaryFunction, input);
@@ -41,6 +43,10 @@ public class Token
         else if (binaryFunctions.Contains(input))
         {
             return new Token(TokenType.BinaryFunction, input);
+        }
+        else if (ternaryFunctions.Contains(input))
+        {
+            return new Token(TokenType.TernaryFunction, input);
         }
         else
         {
@@ -68,7 +74,8 @@ public class Token
             {"sqrt", 10},
             {"max", 10},
             {"min", 10},
-            {"lze", 10}
+            {"lze", 10},
+            {"clamp", 10}
         };
         return pairs.TryGetValue(t.content, out priority);
     }
